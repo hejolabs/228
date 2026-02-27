@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,22 +6,24 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.constants import GRADE_CONFIG
 from app.database import Base, SessionLocal, engine
-from app.routers import class_groups, students
+from app.routers import attendance, class_groups, students
 from app.seed import seed_class_groups
 
 # 모델 import (create_all에서 테이블 생성을 위해 필요)
 import app.models.student  # noqa: F401
 import app.models.cycle  # noqa: F401
+import app.models.attendance  # noqa: F401
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        seed_class_groups(db)
-    finally:
-        db.close()
+    if not os.getenv("TESTING"):
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_class_groups(db)
+        finally:
+            db.close()
     yield
 
 
@@ -36,6 +39,7 @@ app.add_middleware(
 
 app.include_router(class_groups.router)
 app.include_router(students.router)
+app.include_router(attendance.router)
 
 
 @app.get("/api/health")

@@ -10,12 +10,25 @@ from app.schemas.class_group import ClassGroupCreate, ClassGroupResponse, ClassG
 router = APIRouter(prefix="/api/class-groups", tags=["class-groups"])
 
 
+def _to_response(group: ClassGroup) -> dict:
+    """ORM 객체를 수정하지 않고 응답용 dict 반환."""
+    return {
+        "id": group.id,
+        "name": group.name,
+        "days_of_week": json.loads(group.days_of_week),
+        "start_time": group.start_time,
+        "default_duration_minutes": group.default_duration_minutes,
+        "memo": group.memo,
+        "is_active": group.is_active,
+        "created_at": group.created_at,
+        "updated_at": group.updated_at,
+    }
+
+
 @router.get("", response_model=list[ClassGroupResponse])
 def list_class_groups(db: Session = Depends(get_db)):
     groups = db.query(ClassGroup).filter(ClassGroup.is_active).order_by(ClassGroup.start_time).all()
-    for g in groups:
-        g.days_of_week = json.loads(g.days_of_week)
-    return groups
+    return [_to_response(g) for g in groups]
 
 
 @router.get("/{group_id}", response_model=ClassGroupResponse)
@@ -23,8 +36,7 @@ def get_class_group(group_id: int, db: Session = Depends(get_db)):
     group = db.query(ClassGroup).filter(ClassGroup.id == group_id, ClassGroup.is_active).first()
     if not group:
         raise HTTPException(status_code=404, detail="수업반을 찾을 수 없습니다")
-    group.days_of_week = json.loads(group.days_of_week)
-    return group
+    return _to_response(group)
 
 
 @router.post("", response_model=ClassGroupResponse, status_code=201)
@@ -39,8 +51,7 @@ def create_class_group(data: ClassGroupCreate, db: Session = Depends(get_db)):
     db.add(group)
     db.commit()
     db.refresh(group)
-    group.days_of_week = json.loads(group.days_of_week)
-    return group
+    return _to_response(group)
 
 
 @router.put("/{group_id}", response_model=ClassGroupResponse)
@@ -55,8 +66,7 @@ def update_class_group(group_id: int, data: ClassGroupUpdate, db: Session = Depe
     group.memo = data.memo
     db.commit()
     db.refresh(group)
-    group.days_of_week = json.loads(group.days_of_week)
-    return group
+    return _to_response(group)
 
 
 @router.delete("/{group_id}")
