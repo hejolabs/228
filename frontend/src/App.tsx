@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import ClassGroups from './pages/ClassGroups'
 import Students from './pages/Students'
 import Attendance from './pages/Attendance'
+import Payments from './pages/Payments'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="/class-groups" element={<ClassGroups />} />
         <Route path="/students" element={<Students />} />
         <Route path="/attendance" element={<Attendance />} />
+        <Route path="/payments" element={<Payments />} />
       </Route>
     </Routes>
   )
