@@ -3,24 +3,23 @@
 ## 개발 환경 설정
 
 ```bash
-# Python 환경 (pyenv 3.12.12 + uv venv)
-# 가상환경은 backend/.venv에 위치
+# 모든 명령은 프로젝트 루트(228/)에서 실행
+# Python 환경: pyenv 3.12.12 + uv venv (backend/.venv)
 
 # 백엔드 의존성 설치
-cd backend
-uv pip install -r requirements.txt -p .venv/bin/python
+uv pip install -r backend/requirements.txt -p backend/.venv/bin/python
 
 # 백엔드 실행
-cd backend
-.venv/bin/uvicorn app.main:app --reload --port 8000
+backend/.venv/bin/uvicorn app.main:app --reload --port 8000 --app-dir backend
 
 # 프론트엔드 실행 (Node.js 필요 - 별도 설치)
-cd frontend
-npm run dev
+npm run dev --prefix frontend
 ```
 
-> **주의**: 모든 Python 명령은 반드시 `backend/.venv` 가상환경을 통해 실행해야 합니다.
-> `uv`로 생성한 venv이므로 `pip` 대신 `uv pip`을 사용합니다.
+> **주의**:
+> - 모든 명령은 **프로젝트 루트(`228/`)** 기준으로 실행한다. `cd backend/frontend` 하지 않는다.
+> - 모든 Python 명령은 반드시 `backend/.venv` 가상환경을 통해 실행한다.
+> - `uv`로 생성한 venv이므로 `pip` 대신 `uv pip`을 사용한다.
 
 ---
 
