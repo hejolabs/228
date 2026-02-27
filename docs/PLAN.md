@@ -1,5 +1,29 @@
 # 수학공부방 관리 시스템 - 개발 계획
 
+## 개발 환경 설정
+
+```bash
+# Python 환경 (pyenv 3.12.12 + uv venv)
+# 가상환경은 backend/.venv에 위치
+
+# 백엔드 의존성 설치
+cd backend
+uv pip install -r requirements.txt -p .venv/bin/python
+
+# 백엔드 실행
+cd backend
+.venv/bin/uvicorn app.main:app --reload --port 8000
+
+# 프론트엔드 실행 (Node.js 필요 - 별도 설치)
+cd frontend
+npm run dev
+```
+
+> **주의**: 모든 Python 명령은 반드시 `backend/.venv` 가상환경을 통해 실행해야 합니다.
+> `uv`로 생성한 venv이므로 `pip` 대신 `uv pip`을 사용합니다.
+
+---
+
 ## Context
 
 수학공부방 원장님을 위한 학생/수업/출석/수업료 통합 관리 웹앱을 처음부터 개발한다.
