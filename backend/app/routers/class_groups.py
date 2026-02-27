@@ -1,6 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -49,7 +50,11 @@ def create_class_group(data: ClassGroupCreate, db: Session = Depends(get_db)):
         memo=data.memo,
     )
     db.add(group)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="이미 존재하는 수업반 이름입니다")
     db.refresh(group)
     return _to_response(group)
 
