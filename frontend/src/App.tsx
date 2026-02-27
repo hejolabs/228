@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import ClassGroups from './pages/ClassGroups'
 import Students from './pages/Students'
+import Attendance from './pages/Attendance'
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/class-groups" element={<ClassGroups />} />
         <Route path="/students" element={<Students />} />
+        <Route path="/attendance" element={<Attendance />} />
       </Route>
     </Routes>
   )
