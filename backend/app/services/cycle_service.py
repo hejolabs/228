@@ -2,8 +2,11 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from app.constants import GRADE_CONFIG
 from app.models.attendance import Attendance
 from app.models.cycle import Cycle
+from app.models.payment import Payment
+from app.models.student import Student
 
 
 def process_attendance(db: Session, attendance: Attendance) -> dict:
@@ -33,9 +36,34 @@ def process_attendance(db: Session, attendance: Attendance) -> dict:
         cycle.status = "completed"
         cycle.completed_at = date.today()
         result["cycle_completed"] = True
+        _create_payment(db, attendance.student_id, cycle.id)
 
     db.flush()
     return result
+
+
+def _create_payment(db: Session, student_id: int, cycle_id: int):
+    """사이클 완료 시 미납 Payment를 자동 생성한다."""
+    existing = db.query(Payment).filter(
+        Payment.student_id == student_id,
+        Payment.cycle_id == cycle_id,
+    ).first()
+    if existing:
+        return
+
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        return
+
+    grade_cfg = GRADE_CONFIG.get(student.grade, {})
+    amount = student.tuition_amount if student.tuition_amount is not None else grade_cfg.get("tuition", 0)
+
+    payment = Payment(
+        student_id=student_id,
+        cycle_id=cycle_id,
+        amount=amount,
+    )
+    db.add(payment)
 
 
 def recount_cycle(db: Session, cycle_id: int):

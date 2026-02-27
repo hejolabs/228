@@ -6,13 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.constants import GRADE_CONFIG
 from app.database import Base, SessionLocal, engine
-from app.routers import attendance, class_groups, students
+from app.routers import attendance, class_groups, payments, students
 from app.seed import seed_class_groups
 
 # 모델 import (create_all에서 테이블 생성을 위해 필요)
 import app.models.student  # noqa: F401
 import app.models.cycle  # noqa: F401
 import app.models.attendance  # noqa: F401
+import app.models.payment  # noqa: F401
 
 
 @asynccontextmanager
@@ -40,6 +41,7 @@ app.add_middleware(
 app.include_router(class_groups.router)
 app.include_router(students.router)
 app.include_router(attendance.router)
+app.include_router(payments.router)
 
 
 @app.get("/api/health")
