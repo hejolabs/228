@@ -26,7 +26,7 @@ SEED_STUDENTS = [
     {"name": "최유진", "phone": "010-4567-8901", "school": "강남중", "grade": "middle2", "parent_phone": "010-6543-2109", "class_group": "화목반B", "enrollment_status": "active"},
     {"name": "정하은", "phone": "010-5678-9012", "school": "서초고", "grade": "high", "parent_phone": "010-5432-1098", "class_group": "화목반C", "enrollment_status": "active"},
     {"name": "강민수", "phone": "010-6789-0123", "school": "서울초", "grade": "elementary", "parent_phone": "010-4321-0987", "class_group": "화목반A", "enrollment_status": "inquiry"},
-    {"name": "윤소희", "phone": "010-7890-1234", "school": "강남중", "grade": "middle1", "parent_phone": "010-3210-9876", "class_group": "월수반B", "enrollment_status": "level_test", "level_test_date": "2026-03-05", "level_test_time": "15:00"},
+    {"name": "윤소희", "phone": "010-7890-1234", "school": "강남중", "grade": "middle1", "parent_phone": "010-3210-9876", "class_group": "월수반B", "enrollment_status": "level_test", "level_test_date": date(2026, 3, 5), "level_test_time": "15:00"},
 ]
 
 
