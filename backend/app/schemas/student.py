@@ -68,6 +68,7 @@ class StudentResponse(StudentBase):
 class StatusChangeRequest(BaseModel):
     status: str
     memo: str | None = None
+    start_date: str | None = None  # active 전환 시 수업시작일 "2026-03-02"
 
 
 class EnrollmentHistoryResponse(BaseModel):

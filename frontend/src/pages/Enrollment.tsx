@@ -97,6 +97,7 @@ export default function Enrollment() {
   const [statusTarget, setStatusTarget] = useState<Student | null>(null)
   const [nextStatus, setNextStatus] = useState('')
   const [statusMemo, setStatusMemo] = useState('')
+  const [startDate, setStartDate] = useState('')  // active 전환 시 수업시작일
 
   // 이력 다이얼로그
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -107,11 +108,6 @@ export default function Enrollment() {
   const [ltOpen, setLtOpen] = useState(false)
   const [ltTarget, setLtTarget] = useState<Student | null>(null)
   const [ltForm, setLtForm] = useState({ date: '', time: '', result: '' })
-
-  // 사이클 시작 다이얼로그
-  const [cycleOpen, setCycleOpen] = useState(false)
-  const [cycleStudent, setCycleStudent] = useState<Student | null>(null)
-  const [cycleStartDate, setCycleStartDate] = useState('')
 
   // 신규 문의 등록 다이얼로그
   const [createOpen, setCreateOpen] = useState(false)
@@ -149,17 +145,23 @@ export default function Enrollment() {
     const transitions = ALLOWED_TRANSITIONS[s.enrollment_status] ?? []
     if (transitions.length === 0) return
     setStatusTarget(s)
-    setNextStatus(target ?? transitions[0])
+    const t = target ?? transitions[0]
+    setNextStatus(t)
     setStatusMemo('')
+    setStartDate(t === 'active' ? new Date().toISOString().slice(0, 10) : '')
     setStatusOpen(true)
   }
 
   const handleStatusChange = async () => {
     if (!statusTarget) return
+    const body: Record<string, unknown> = { status: nextStatus, memo: statusMemo || null }
+    if (nextStatus === 'active' && startDate) {
+      body.start_date = startDate
+    }
     const res = await fetch(`/api/students/${statusTarget.id}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: nextStatus, memo: statusMemo || null }),
+      body: JSON.stringify(body),
     })
     if (!res.ok) {
       const err = await res.json()
@@ -167,16 +169,6 @@ export default function Enrollment() {
       return
     }
     setStatusOpen(false)
-
-    // active로 변경 시 사이클 시작 제안
-    if (nextStatus === 'active') {
-      const updated: Student = await res.json()
-      if (!updated.current_cycle) {
-        setCycleStudent(updated)
-        setCycleStartDate(new Date().toISOString().slice(0, 10))
-        setCycleOpen(true)
-      }
-    }
     fetchAllStudents()
   }
 
@@ -215,23 +207,6 @@ export default function Enrollment() {
       return
     }
     setLtOpen(false)
-    fetchAllStudents()
-  }
-
-  // 사이클 시작
-  const handleStartCycle = async () => {
-    if (!cycleStudent) return
-    const res = await fetch(`/api/students/${cycleStudent.id}/start-cycle`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start_date: cycleStartDate }),
-    })
-    if (!res.ok) {
-      const err = await res.json()
-      alert(err.detail || '사이클 시작 실패')
-      return
-    }
-    setCycleOpen(false)
     fetchAllStudents()
   }
 
@@ -410,7 +385,10 @@ export default function Enrollment() {
                 {ENROLLMENT_STATUS[statusTarget?.enrollment_status ?? '']?.label}
               </span>
               <span>→</span>
-              <Select value={nextStatus} onValueChange={setNextStatus}>
+              <Select value={nextStatus} onValueChange={(v) => {
+                setNextStatus(v)
+                setStartDate(v === 'active' ? new Date().toISOString().slice(0, 10) : '')
+              }}>
                 <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(ALLOWED_TRANSITIONS[statusTarget?.enrollment_status ?? ''] ?? []).map((s) => (
@@ -419,6 +397,19 @@ export default function Enrollment() {
                 </SelectContent>
               </Select>
             </div>
+            {nextStatus === 'active' && (
+              <div className="grid gap-2">
+                <Label>수업 시작일</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  수업 시작일 기준으로 8회차 스케줄이 자동 생성됩니다.
+                </p>
+              </div>
+            )}
             <div className="grid gap-2">
               <Label>메모 (선택)</Label>
               <Input
@@ -515,32 +506,6 @@ export default function Enrollment() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setLtOpen(false)}>취소</Button>
             <Button onClick={handleLevelTestSave}>저장</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 사이클 시작 다이얼로그 */}
-      <Dialog open={cycleOpen} onOpenChange={setCycleOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>첫 사이클 시작 - {cycleStudent?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              수업 시작일을 선택하면 8회차 스케줄이 자동 생성됩니다.
-            </p>
-            <div className="grid gap-2">
-              <Label>수업 시작일</Label>
-              <Input
-                type="date"
-                value={cycleStartDate}
-                onChange={(e) => setCycleStartDate(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCycleOpen(false)}>나중에</Button>
-            <Button onClick={handleStartCycle}>시작</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

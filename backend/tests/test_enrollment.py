@@ -1,6 +1,8 @@
-"""Phase 5.2: 수업등록 관리 - 레벨테스트/상태별 일자 테스트."""
+"""Phase 5.2/5.3: 수업등록 관리 - 레벨테스트/상태별 일자/사이클 자동시작 테스트."""
 
 import pytest
+
+from app.models.attendance import Attendance
 
 
 @pytest.fixture()
@@ -139,3 +141,67 @@ class TestStatusDates:
         default = client.get("/api/students").json()
         assert len(default) == 1
         assert default[0]["name"] == "문의학생"
+
+
+class TestStatusChangeWithCycle:
+    """Phase 5.3: 상태 변경 시 사이클 자동 시작."""
+
+    def test_active_with_start_date_creates_cycle(self, client, db, class_group):
+        """active 전환 + start_date → 사이클 + 출석 스케줄 자동 생성."""
+        student = client.post("/api/students", json={
+            **STUDENT_BASE,
+            "class_group_id": class_group["id"],
+            "enrollment_status": "level_test",
+        }).json()
+
+        res = client.post(f"/api/students/{student['id']}/status", json={
+            "status": "active",
+            "start_date": "2026-03-02",
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["enrollment_status"] == "active"
+        assert data["current_cycle"] is not None
+        assert data["current_cycle"]["total_count"] == 8
+
+        # DB에서 출석 스케줄 확인
+        att_count = db.query(Attendance).filter(
+            Attendance.student_id == student["id"],
+        ).count()
+        assert att_count == 8
+
+    def test_active_without_start_date_no_cycle(self, client, class_group):
+        """active 전환 + start_date 없음 → 사이클 미생성."""
+        student = client.post("/api/students", json={
+            **STUDENT_BASE,
+            "class_group_id": class_group["id"],
+        }).json()
+
+        res = client.post(f"/api/students/{student['id']}/status", json={
+            "status": "active",
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["current_cycle"] is None
+
+    def test_re_enrollment_with_start_date(self, client, class_group):
+        """stopped → active 재등록 + start_date → 새 사이클 생성."""
+        student = client.post("/api/students", json={
+            **STUDENT_BASE,
+            "class_group_id": class_group["id"],
+            "enrollment_status": "active",
+        }).json()
+
+        # active → stopped
+        client.post(f"/api/students/{student['id']}/status", json={
+            "status": "stopped",
+        })
+
+        # stopped → active (재등록)
+        res = client.post(f"/api/students/{student['id']}/status", json={
+            "status": "active",
+            "start_date": "2026-03-09",
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["current_cycle"] is not None

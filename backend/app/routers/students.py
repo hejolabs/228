@@ -1,10 +1,14 @@
+from datetime import date as date_type
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.constants import GRADE_CONFIG
 from app.database import get_db
+from app.models.cycle import Cycle
 from app.models.enrollment_history import EnrollmentHistory
 from app.models.student import Student
+from app.services.cycle_service import start_cycle
 from app.schemas.student import (
     EnrollmentHistoryResponse,
     LevelTestUpdate,
@@ -204,6 +208,17 @@ def change_status(student_id: int, data: StatusChangeRequest, db: Session = Depe
         memo=data.memo,
     )
     db.add(history)
+
+    # active 전환 시 start_date가 있으면 사이클 자동 시작
+    if target == "active" and data.start_date:
+        existing = db.query(Cycle).filter(
+            Cycle.student_id == student_id,
+            Cycle.status == "in_progress",
+        ).first()
+        if not existing:
+            sd = date_type.fromisoformat(data.start_date)
+            start_cycle(db, student_id, sd)
+
     db.commit()
     db.refresh(student)
     return _to_response(student, db)
