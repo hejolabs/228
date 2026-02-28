@@ -16,22 +16,6 @@ interface ClassGroup {
   days_of_week: string[]
 }
 
-interface Cycle {
-  id: number
-  current_count: number
-  total_count: number
-  status: string
-}
-
-interface Student {
-  id: number
-  name: string
-  grade: string
-  class_group_id: number
-  class_group_name: string | null
-  current_cycle: Cycle | null
-}
-
 interface AttendanceRecord {
   id: number
   student_id: number
@@ -52,18 +36,8 @@ const STATUS_OPTIONS = [
   { value: 'absent_excused', label: '결석(미차감)', color: 'bg-gray-100 text-gray-800' },
 ]
 
-const EXCUSE_OPTIONS = [
-  { value: 'school_event', label: '학교행사' },
-  { value: 'sick_leave', label: '병결' },
-  { value: 'class_cancelled', label: '휴강' },
-]
-
 const DAY_MAP: Record<number, string> = {
   0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat',
-}
-
-const GRADE_LABELS: Record<string, string> = {
-  elementary: '초등', middle1: '중1', middle2: '중2', middle3: '중3', high: '고등',
 }
 
 function getStatusBadge(status: string) {
@@ -75,7 +49,6 @@ export default function Attendance() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
   const [selectedGroup, setSelectedGroup] = useState<string>('')
-  const [students, setStudents] = useState<Student[]>([])
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -94,66 +67,32 @@ export default function Attendance() {
     }
   }, [date, classGroups])
 
-  // 수업반 선택 시 학생 + 출석 기록 로드
+  // 수업반 선택 시 출석 기록 로드 (스케줄 기반 - 미리 생성된 레코드)
   useEffect(() => {
     if (!selectedGroup) return
     setLoading(true)
-    Promise.all([
-      fetch(`/api/students?class_group_id=${selectedGroup}`).then((r) => r.json()),
-      fetch(`/api/attendance/daily/${date}?class_group_id=${selectedGroup}`).then((r) => r.json()),
-    ]).then(([s, a]) => {
-      setStudents(s)
-      setRecords(a)
-      setLoading(false)
-    })
+    fetch(`/api/attendance/daily/${date}?class_group_id=${selectedGroup}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setRecords(data)
+        setLoading(false)
+      })
   }, [selectedGroup, date])
 
-  const getRecord = (studentId: number) => records.find((r) => r.student_id === studentId)
+  const handleStatusChange = async (record: AttendanceRecord, newStatus: string) => {
+    const isExcused = newStatus === 'absent_excused'
 
-  const handleAttendance = async (studentId: number, status: string) => {
-    const existing = getRecord(studentId)
-    const isExcused = status === 'absent_excused'
-
-    if (existing) {
-      // 수정
-      const res = await fetch(`/api/attendance/${existing.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status,
-          counts_toward_cycle: !isExcused,
-          excuse_reason: isExcused ? 'sick_leave' : null,
-        }),
-      })
-      const updated = await res.json()
-      setRecords((prev) => prev.map((r) => r.id === existing.id ? updated : r))
-    } else {
-      // 신규
-      const res = await fetch('/api/attendance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          student_id: studentId,
-          date,
-          status,
-          counts_toward_cycle: !isExcused,
-          excuse_reason: isExcused ? 'sick_leave' : null,
-        }),
-      })
-      const created = await res.json()
-      setRecords((prev) => [...prev, created])
-    }
-
-    // 학생 목록도 갱신 (사이클 카운트 반영)
-    const studentsRes = await fetch(`/api/students?class_group_id=${selectedGroup}`)
-    setStudents(await studentsRes.json())
-  }
-
-  const handleDelete = async (attId: number) => {
-    await fetch(`/api/attendance/${attId}`, { method: 'DELETE' })
-    setRecords((prev) => prev.filter((r) => r.id !== attId))
-    const studentsRes = await fetch(`/api/students?class_group_id=${selectedGroup}`)
-    setStudents(await studentsRes.json())
+    const res = await fetch(`/api/attendance/${record.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: newStatus,
+        counts_toward_cycle: !isExcused,
+        excuse_reason: isExcused ? 'sick_leave' : null,
+      }),
+    })
+    const updated = await res.json()
+    setRecords((prev) => prev.map((r) => r.id === record.id ? updated : r))
   }
 
   // 요일 기반 수업반 필터
@@ -205,69 +144,44 @@ export default function Attendance() {
           <TableHeader>
             <TableRow>
               <TableHead>이름</TableHead>
-              <TableHead>학년</TableHead>
               <TableHead>회차</TableHead>
               <TableHead>출석 상태</TableHead>
               <TableHead>출석 체크</TableHead>
-              <TableHead className="text-right">취소</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {students.map((s) => {
-              const record = getRecord(s.id)
-              const cycle = s.current_cycle
-              const isNearComplete = cycle && cycle.current_count >= 7
-
-              return (
-                <TableRow key={s.id} className={isNearComplete ? 'bg-red-50' : ''}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{GRADE_LABELS[s.grade] ?? s.grade}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {cycle ? (
-                      <span className={`font-mono font-bold ${isNearComplete ? 'text-destructive' : ''}`}>
-                        {cycle.current_count}/{cycle.total_count}
-                      </span>
-                    ) : '-'}
-                  </TableCell>
-                  <TableCell>
-                    {record ? getStatusBadge(record.status) : <span className="text-muted-foreground text-sm">미처리</span>}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      {STATUS_OPTIONS.map((opt) => (
-                        <Button
-                          key={opt.value}
-                          size="sm"
-                          variant={record?.status === opt.value ? 'default' : 'outline'}
-                          className="text-xs px-2 py-1 h-7"
-                          onClick={() => handleAttendance(s.id, opt.value)}
-                        >
-                          {opt.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {record && (
+            {records.map((record) => (
+              <TableRow key={record.id}>
+                <TableCell className="font-medium">{record.student_name}</TableCell>
+                <TableCell>
+                  <span className={`font-mono font-bold ${record.current_count >= 7 ? 'text-destructive' : ''}`}>
+                    {record.current_count}/{record.total_count}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  {getStatusBadge(record.status)}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    {STATUS_OPTIONS.map((opt) => (
                       <Button
-                        variant="ghost"
+                        key={opt.value}
                         size="sm"
-                        className="text-destructive text-xs"
-                        onClick={() => handleDelete(record.id)}
+                        variant={record.status === opt.value ? 'default' : 'outline'}
+                        className="text-xs px-2 py-1 h-7"
+                        onClick={() => handleStatusChange(record, opt.value)}
                       >
-                        취소
+                        {opt.label}
                       </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-            {students.length === 0 && (
+                    ))}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {records.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  {selectedGroup ? '이 수업반에 학생이 없습니다.' : '수업반을 선택해주세요.'}
+                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  {selectedGroup ? '이 날짜에 스케줄이 없습니다.' : '수업반을 선택해주세요.'}
                 </TableCell>
               </TableRow>
             )}
