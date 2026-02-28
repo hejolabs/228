@@ -26,8 +26,8 @@ STUDENT_BASE = {
 class TestStudentCreate:
     """학생 등록 테스트."""
 
-    def test_create_student_with_auto_cycle(self, client, class_group):
-        """등록 시 첫 사이클(1번째, 0/8) 자동 생성."""
+    def test_create_student_default_inquiry(self, client, class_group):
+        """등록 시 기본 상태 inquiry, 사이클 없음."""
         res = client.post("/api/students", json={
             **STUDENT_BASE, "class_group_id": class_group["id"],
         })
@@ -35,11 +35,8 @@ class TestStudentCreate:
         assert res.status_code == 201
         data = res.json()
         assert data["name"] == "김학생"
-        assert data["current_cycle"] is not None
-        assert data["current_cycle"]["cycle_number"] == 1
-        assert data["current_cycle"]["current_count"] == 0
-        assert data["current_cycle"]["total_count"] == 8
-        assert data["current_cycle"]["status"] == "in_progress"
+        assert data["enrollment_status"] == "inquiry"
+        assert data["current_cycle"] is None  # 사이클 자동 생성 안 됨
 
     def test_elementary_default_tuition(self, client, class_group):
         """초등 학년 → effective_tuition 240,000원."""

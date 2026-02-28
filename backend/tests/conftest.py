@@ -55,7 +55,7 @@ def client(db):
 
 @pytest.fixture()
 def seed_class_group(client):
-    """테스트용 수업반 1개 생성."""
+    """테스트용 수업반 1개 생성 (월, 수)."""
     res = client.post("/api/class-groups", json={
         "name": "테스트반",
         "days_of_week": ["mon", "wed"],
@@ -67,7 +67,12 @@ def seed_class_group(client):
 
 @pytest.fixture()
 def seed_student(client, seed_class_group):
-    """테스트용 학생 1명 생성 (사이클 자동 생성됨)."""
+    """테스트용 학생 1명 생성 (active 상태 + 사이클 시작됨).
+
+    - enrollment_status=active로 등록
+    - 사이클을 시작하여 8회차 스케줄 자동 생성
+    - 시작일: 2026-03-02 (월요일) → 월수 기준 8회차 스케줄
+    """
     res = client.post("/api/students", json={
         "name": "김테스트",
         "phone": "010-1111-2222",
@@ -75,5 +80,15 @@ def seed_student(client, seed_class_group):
         "grade": "elementary",
         "parent_phone": "010-3333-4444",
         "class_group_id": seed_class_group["id"],
+        "enrollment_status": "active",
     })
-    return res.json()
+    student = res.json()
+
+    # 사이클 시작 (스케줄 8회차 미리 생성)
+    client.post(f"/api/students/{student['id']}/start-cycle", json={
+        "start_date": "2026-03-02",
+    })
+
+    # 학생 정보 갱신 (current_cycle 포함)
+    updated = client.get(f"/api/students/{student['id']}").json()
+    return updated

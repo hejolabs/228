@@ -14,6 +14,7 @@ import app.models.student  # noqa: F401
 import app.models.cycle  # noqa: F401
 import app.models.attendance  # noqa: F401
 import app.models.payment  # noqa: F401
+import app.models.enrollment_history  # noqa: F401
 
 
 @asynccontextmanager

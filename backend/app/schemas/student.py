@@ -15,7 +15,7 @@ class StudentBase(BaseModel):
 
 
 class StudentCreate(StudentBase):
-    pass
+    enrollment_status: str = "inquiry"
 
 
 class StudentUpdate(StudentBase):
@@ -36,11 +36,26 @@ class CycleResponse(BaseModel):
 
 class StudentResponse(StudentBase):
     id: int
-    is_active: bool
+    enrollment_status: str
     created_at: datetime
     updated_at: datetime
     class_group_name: str | None = None
     current_cycle: CycleResponse | None = None
     effective_tuition: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class StatusChangeRequest(BaseModel):
+    status: str
+    memo: str | None = None
+
+
+class EnrollmentHistoryResponse(BaseModel):
+    id: int
+    from_status: str | None
+    to_status: str
+    changed_at: datetime
+    memo: str | None
 
     model_config = {"from_attributes": True}
