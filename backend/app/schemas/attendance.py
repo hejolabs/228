@@ -42,6 +42,8 @@ class AttendanceResponse(BaseModel):
     memo: str | None
     created_at: datetime
     student_name: str | None = None
+    class_group_name: str | None = None
+    start_time: str | None = None
     current_count: int = 0
     total_count: int = 8
 

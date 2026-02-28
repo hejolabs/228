@@ -23,6 +23,8 @@ interface AttendanceRecord {
   counts_toward_cycle: boolean
   excuse_reason: string | null
   student_name: string | null
+  class_group_name: string | null
+  start_time: string | null
   current_count: number
   total_count: number
 }
@@ -59,18 +61,19 @@ export default function Attendance() {
   // 날짜 변경 시 요일에 해당하는 수업반 자동 선택
   useEffect(() => {
     if (classGroups.length === 0) return
-    const dayOfWeek = DAY_MAP[new Date(date).getDay()]
-    const matched = classGroups.filter((g) => g.days_of_week.includes(dayOfWeek))
-    if (matched.length > 0 && !selectedGroup) {
-      setSelectedGroup(String(matched[0].id))
+    if (!selectedGroup) {
+      setSelectedGroup('all')
     }
-  }, [date, classGroups])
+  }, [classGroups])
 
   // 수업반 선택 시 출석 기록 로드 (스케줄 기반 - 미리 생성된 레코드)
   useEffect(() => {
     if (!selectedGroup) return
     setLoading(true)
-    fetch(`/api/attendance/daily/${date}?class_group_id=${selectedGroup}`)
+    const url = selectedGroup === 'all'
+      ? `/api/attendance/daily/${date}`
+      : `/api/attendance/daily/${date}?class_group_id=${selectedGroup}`
+    fetch(url)
       .then((r) => r.json())
       .then((data) => {
         setRecords(data)
@@ -105,12 +108,24 @@ export default function Attendance() {
       <div className="flex gap-4 mb-4 items-end">
         <div className="grid gap-2">
           <Label>날짜</Label>
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => { setDate(e.target.value); setSelectedGroup('') }}
-            className="w-44"
-          />
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="px-2 h-9" onClick={() => {
+              const d = new Date(date)
+              d.setDate(d.getDate() - 1)
+              setDate(d.toISOString().slice(0, 10))
+            }}>◀</Button>
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-44"
+            />
+            <Button variant="outline" size="sm" className="px-2 h-9" onClick={() => {
+              const d = new Date(date)
+              d.setDate(d.getDate() + 1)
+              setDate(d.toISOString().slice(0, 10))
+            }}>▶</Button>
+          </div>
         </div>
         <div className="grid gap-2">
           <Label>수업반</Label>
@@ -119,6 +134,7 @@ export default function Attendance() {
               <SelectValue placeholder="수업반 선택" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
               {todayGroups.length > 0 ? (
                 todayGroups.map((g) => (
                   <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
@@ -143,6 +159,8 @@ export default function Attendance() {
           <TableHeader>
             <TableRow>
               <TableHead>이름</TableHead>
+              <TableHead>수업반</TableHead>
+              <TableHead>시작시간</TableHead>
               <TableHead>회차</TableHead>
               <TableHead>출석 상태</TableHead>
               <TableHead>출석 체크</TableHead>
@@ -152,6 +170,8 @@ export default function Attendance() {
             {records.map((record) => (
               <TableRow key={record.id}>
                 <TableCell className="font-medium">{record.student_name}</TableCell>
+                <TableCell>{record.class_group_name ?? '-'}</TableCell>
+                <TableCell>{record.start_time ?? '-'}</TableCell>
                 <TableCell>
                   <span className={`font-mono font-bold ${record.current_count >= 7 ? 'text-destructive' : ''}`}>
                     {record.current_count}/{record.total_count}
@@ -179,7 +199,7 @@ export default function Attendance() {
             ))}
             {records.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   {selectedGroup ? '이 날짜에 스케줄이 없습니다.' : '수업반을 선택해주세요.'}
                 </TableCell>
               </TableRow>

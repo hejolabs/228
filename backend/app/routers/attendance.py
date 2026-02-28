@@ -31,6 +31,7 @@ def _to_response(att: Attendance, db: Session) -> dict:
     if cycle:
         db.refresh(cycle)
     student = db.query(Student).filter(Student.id == att.student_id).first()
+    class_group = student.class_group if student else None
     return {
         "id": att.id,
         "student_id": att.student_id,
@@ -42,6 +43,8 @@ def _to_response(att: Attendance, db: Session) -> dict:
         "memo": att.memo,
         "created_at": att.created_at,
         "student_name": student.name if student else None,
+        "class_group_name": class_group.name if class_group else None,
+        "start_time": class_group.start_time if class_group else None,
         "current_count": cycle.current_count if cycle else 0,
         "total_count": cycle.total_count if cycle else 8,
     }
