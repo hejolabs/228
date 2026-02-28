@@ -40,7 +40,8 @@ Phase 1 (프로젝트 세팅)
                    ├──> Phase 4 (출석 + 8회차 사이클) ★ 핵심
                    │       ├──> Phase 5 (수업료 + 메시지)
                    │       │       └──> Phase 5.1 (수업등록 + 스케줄 기반 출석) ★ 핵심 변경
-                   │       │               └──> Phase 5.2 (수업등록 관리 페이지) ← NEW
+                   │       │               ├──> Phase 5.2 (수업등록 관리 페이지)
+                   │       │               └──> Phase 5.3 (수업시작 연동 + 시드 데이터) ← NEW
                    │       └──> Phase 6 (보충수업)
                    └──> Phase 7 (대시보드 + UI 개선)
                            └──> Phase 8 (학습관리 + 현금영수증)
@@ -468,6 +469,108 @@ StudentResponse에 추가:
 
 ---
 
+## Phase 5.3: 수업시작 연동 + 시드 데이터 (출석 스케줄 자동 생성)
+
+**목표**: 수업등록 관리에서 "수업시작" 또는 "재등록" 시 수업시작일 입력 → 사이클 + 8회차 출석 스케줄 자동 생성. 시드 데이터도 동일하게 동작.
+
+### 현재 문제점
+
+1. **Enrollment.tsx**: 상태변경(→active) 후 별도 사이클 시작 다이얼로그가 뜨는 2단계 구조 → 수업시작일을 상태변경 다이얼로그에 통합해야 함
+2. **재등록(stopped→active)**: 사이클 시작 연동 없음
+3. **seed.py**: active 학생 5명이 있지만 Cycle/Attendance 레코드 미생성 → 출석 관리 페이지에 아무 데이터 없음
+
+---
+
+### A. 프론트엔드 - Enrollment.tsx 수정
+
+#### 상태변경 다이얼로그 통합
+
+**현재 흐름** (2단계):
+```
+[→수업시작] 클릭 → 상태변경 다이얼로그(메모) → 변경 → 사이클 시작 다이얼로그(시작일) → 시작
+```
+
+**변경 후** (1단계):
+```
+[→수업시작] 클릭 → 상태변경 다이얼로그(메모 + 수업시작일) → 변경 + 사이클 자동 시작
+```
+
+- `nextStatus === 'active'`일 때 다이얼로그에 **수업시작일 날짜 입력** 필드 추가
+- 변경 버튼 클릭 시: 상태변경 API → 사이클 시작 API 순차 호출
+- 별도 사이클 시작 다이얼로그 제거
+
+#### 재등록(stopped→active) 처리
+- 동일하게 수업시작일 입력 → 상태변경 + 사이클 시작 연동
+
+---
+
+### B. 백엔드 - 상태변경 시 사이클 자동 시작 (선택적)
+
+**방법 1: 프론트에서 순차 호출** (현재 구조 유지)
+- 프론트: `POST /status` → `POST /start-cycle` 순차 호출
+- 백엔드 변경 없음
+
+**방법 2: 백엔드에서 통합** (추천)
+- `POST /api/students/{id}/status` 요청에 `start_date` 옵션 필드 추가
+- `active`로 전환 + `start_date` 있으면 → 사이클 자동 시작
+
+```python
+class StatusChangeRequest(BaseModel):
+    status: str
+    memo: str | None = None
+    start_date: str | None = None  # active 전환 시 수업시작일
+```
+
+- 장점: 원자적 처리 (상태변경 + 사이클 시작이 한 트랜잭션)
+- 변경 파일: `schemas/student.py`, `routers/students.py`
+
+---
+
+### C. seed.py - active 학생에 사이클 + 출석 스케줄 생성
+
+현재 seed.py는 active 학생만 등록하고 Cycle/Attendance를 생성하지 않음.
+
+**변경 후**: active 상태 학생에 대해 `cycle_service.start_cycle()` 호출
+
+```python
+from app.services.cycle_service import start_cycle
+from datetime import date, timedelta
+
+# active 학생에 사이클 + 8회차 출석 스케줄 생성
+# 시작일: 현재 주의 첫 수업 요일 (수업반 기준)
+for student in db.query(Student).filter(Student.enrollment_status == "active").all():
+    start_cycle(db, student.id, 시작일_계산())
+```
+
+시작일 계산 로직:
+- 수업반의 `days_of_week` 기준
+- 오늘 날짜에서 가장 가까운 과거/현재 수업 요일을 시작일로 설정
+- 예: 오늘이 수요일이고 월수반이면 → 이번 주 월요일부터 시작
+
+---
+
+### D. 수정할 파일 목록
+
+| 파일 | 작업 |
+|------|------|
+| `backend/app/schemas/student.py` | StatusChangeRequest에 start_date 추가 |
+| `backend/app/routers/students.py` | active 전환 시 사이클 자동 시작 로직 |
+| `backend/app/seed.py` | active 학생에 cycle + attendance 생성 |
+| `backend/tests/test_enrollment.py` | 상태변경+사이클 통합 테스트 |
+| `frontend/src/pages/Enrollment.tsx` | 상태변경 다이얼로그에 수업시작일 통합, 별도 사이클 다이얼로그 제거 |
+
+---
+
+### E. 검증
+
+1. Enrollment에서 level_test → active 전환 시 수업시작일 입력 → 사이클+출석 생성 확인
+2. stopped → active 재등록 시 동일 동작 확인
+3. 출석 관리 페이지에서 해당 날짜에 스케줄 표시 확인
+4. seed.py 실행 후 active 학생 5명의 출석 스케줄이 출석 관리에 표시되는지 확인
+5. 기존 테스트 전체 통과
+
+---
+
 ## Phase 6: 보충수업 관리
 
 **목표**: 결석 시 보충수업 등록/완료 관리 (회차 복구 없음)
@@ -518,6 +621,8 @@ StudentResponse에 추가:
 9. **수업등록 관리 페이지 분리** - Students는 정보 CRUD만, 상태 관리는 Enrollment 전담 (Phase 5.2)
 10. **상태별 일자** - EnrollmentHistory.changed_at에서 계산 (별도 필드 불필요) (Phase 5.2)
 11. **레벨테스트 일정/결과** - Student 모델에 level_test_date/time/result 필드 추가 (Phase 5.2)
+12. **수업시작 시 사이클 자동 시작** - 상태변경 API에 start_date 통합, 원자적 처리 (Phase 5.3)
+13. **시드 데이터 완전성** - active 학생은 Cycle + 8회차 Attendance 포함하여 시드 (Phase 5.3)
 
 ---
 
