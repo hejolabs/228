@@ -40,6 +40,7 @@ Phase 1 (프로젝트 세팅)
                    ├──> Phase 4 (출석 + 8회차 사이클) ★ 핵심
                    │       ├──> Phase 5 (수업료 + 메시지)
                    │       │       └──> Phase 5.1 (수업등록 + 스케줄 기반 출석) ★ 핵심 변경
+                   │       │               └──> Phase 5.2 (수업등록 관리 페이지) ← NEW
                    │       └──> Phase 6 (보충수업)
                    └──> Phase 7 (대시보드 + UI 개선)
                            └──> Phase 8 (학습관리 + 현금영수증)
@@ -332,6 +333,141 @@ middle2: 120분, 35만 / middle3: 120분, 35만 / high: 120분, 40만
 
 ---
 
+## Phase 5.2: 수업등록 관리 페이지
+
+**목표**: 수업등록 절차를 전담하는 별도 페이지 (대시보드와 같은 레벨). Students.tsx는 학생 기본정보 CRUD만 담당하도록 역할 분리.
+
+### 핵심 변경
+
+1. **Enrollment.tsx** (신규) - 탭+테이블 파이프라인 뷰로 수업등록 상태 관리
+2. **Students.tsx** 경량화 - 상태변경/이력/사이클시작 제거 → 기본정보 CRUD만
+3. **Student 모델** - 레벨테스트 관련 필드 추가
+4. **상태별 일자** - EnrollmentHistory의 changed_at에서 계산하여 API 응답에 포함
+
+---
+
+### A. 백엔드 변경
+
+#### Student 모델 필드 추가 (`backend/app/models/student.py`)
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| level_test_date | DATE, nullable | 레벨테스트 예정일 |
+| level_test_time | VARCHAR(5), nullable | 예정 시간 "14:00" |
+| level_test_result | TEXT, nullable | 테스트 결과/메모 |
+
+#### 스키마 변경 (`backend/app/schemas/student.py`)
+
+StudentResponse에 추가:
+- `level_test_date`, `level_test_time`, `level_test_result` (레벨테스트 정보)
+- `inquiry_date`, `level_test_status_date`, `active_date`, `stopped_date` (상태별 일자, EnrollmentHistory에서 계산)
+
+신규 스키마:
+- `LevelTestUpdate`: date, time, result
+
+#### 신규 API
+
+| Method | Path | 설명 |
+|--------|------|------|
+| PUT | `/api/students/{id}/level-test` | 레벨테스트 일정/결과 업데이트 |
+
+#### `_to_response` 수정
+
+`db` 파라미터 추가 → EnrollmentHistory에서 각 상태별 최초 전환 일자를 조회하여 응답에 포함
+
+---
+
+### B. 프론트엔드 - Enrollment.tsx (신규)
+
+#### UI: 탭 + 테이블 파이프라인 뷰
+
+```
+[수업등록 관리]                                    [+ 신규 문의]
+
+[문의(2)] [레벨테스트(1)] [수업중(5)] [종료(3)]
+
+(문의 탭)
+이름    학년   수업반   문의일     학부모 연락처      액션
+───────────────────────────────────────────────────────────
+김민수  중2   월수A    2/25     010-1234-5678    [→레벨테스트] [이력]
+정하은  초등  미정     2/27     010-9876-5432    [→레벨테스트] [이력]
+
+(레벨테스트 탭)
+이름    학년   수업반   테스트 예정     결과     액션
+───────────────────────────────────────────────────────────
+박지영  고등   화목A   3/1 14:00    미완료    [일정/결과] [→수업시작] [이력]
+
+(수업중 탭)
+이름    학년   수업반   수업시작일   회차    수업료       액션
+───────────────────────────────────────────────────────────
+이수진  중1   화목A    1/15      5/8   320,000원   [→수업종료] [이력]
+
+(종료 탭)
+이름    학년   수업반   수업종료일    액션
+───────────────────────────────────────────────────────────
+최동현  중3   화목A    1/15       [→재등록] [이력]
+```
+
+#### 탭별 고유 컬럼
+
+| 탭 | 고유 컬럼 |
+|----|----------|
+| 문의 | 문의일, 학부모 연락처 |
+| 레벨테스트 | 테스트 예정일시, 결과 |
+| 수업중 | 수업시작일, 회차(N/8), 수업료 |
+| 종료 | 수업종료일 |
+
+#### 기능
+1. **탭 클릭** → 해당 상태 학생 목록 로드
+2. **상태 변경 버튼** → 확인 다이얼로그 (메모 입력) → `POST /api/students/{id}/status`
+3. **레벨테스트 일정/결과** → 다이얼로그에서 입력 → `PUT /api/students/{id}/level-test`
+4. **이력 보기** → EnrollmentHistory 타임라인 다이얼로그
+5. **active 전환 시** → 사이클 시작 제안 (기존 Students.tsx 로직 이동)
+6. **신규 문의 등록** → 간소화 등록 폼 (이름, 학년, 연락처, 수업반, 메모)
+
+---
+
+### C. 프론트엔드 - Students.tsx 경량화
+
+#### 제거
+- 상태 변경 다이얼로그, 이력 다이얼로그, 사이클 시작 다이얼로그
+- 상태 필터 드롭다운, 상태 배지 컬럼
+- 상태변경/이력/삭제 버튼
+
+#### 유지
+- 학생 목록 테이블 (이름, 학교, 학년, 수업반, 연락처, 수업료)
+- 수업반 필터
+- 학생 등록/수정 다이얼로그 (기본정보 CRUD)
+- 기본 조회: `enrollment_status=active` (수업중인 학생 정보 관리)
+
+---
+
+### D. 네비게이션 추가
+
+**Sidebar.tsx** 메뉴 순서:
+```
+대시보드 → 수업반 관리 → 학생 관리 → 수업등록 → 출석 관리 → 수업료 관리 → 보충수업
+```
+
+**App.tsx**: `/enrollment` 라우트 추가
+
+---
+
+### E. 수정할 파일 목록
+
+| 파일 | 작업 |
+|------|------|
+| `backend/app/models/student.py` | level_test 필드 3개 추가 |
+| `backend/app/schemas/student.py` | 스키마 수정 + LevelTestUpdate 추가 |
+| `backend/app/routers/students.py` | _to_response 수정 + level-test 엔드포인트 |
+| `backend/tests/test_students.py` | 레벨테스트 필드 테스트 추가 |
+| `frontend/src/pages/Enrollment.tsx` | **신규** |
+| `frontend/src/pages/Students.tsx` | 상태 관련 기능 제거 |
+| `frontend/src/components/Sidebar.tsx` | 수업등록 메뉴 추가 |
+| `frontend/src/App.tsx` | Enrollment 라우트 추가 |
+
+---
+
 ## Phase 6: 보충수업 관리
 
 **목표**: 결석 시 보충수업 등록/완료 관리 (회차 복구 없음)
@@ -379,6 +515,9 @@ middle2: 120분, 35만 / middle3: 120분, 35만 / high: 120분, 40만
 6. **enrollment_status 도입** - inquiry/level_test/active/stopped 4단계 + 이력 자동 기록 (Phase 5.1)
 7. **스케줄 기반 출석** - 사이클 시작 시 8회차 출석 미리 생성, 기본 출석 상태 (Phase 5.1)
 8. **선불 수업료** - 납부 확인(paid) 후 사이클 시작 가능 (Phase 5.1)
+9. **수업등록 관리 페이지 분리** - Students는 정보 CRUD만, 상태 관리는 Enrollment 전담 (Phase 5.2)
+10. **상태별 일자** - EnrollmentHistory.changed_at에서 계산 (별도 필드 불필요) (Phase 5.2)
+11. **레벨테스트 일정/결과** - Student 모델에 level_test_date/time/result 필드 추가 (Phase 5.2)
 
 ---
 
