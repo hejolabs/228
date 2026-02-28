@@ -16,10 +16,21 @@ class StudentBase(BaseModel):
 
 class StudentCreate(StudentBase):
     enrollment_status: str = "inquiry"
+    level_test_date: date | None = None
+    level_test_time: str | None = None
+    level_test_result: str | None = None
 
 
 class StudentUpdate(StudentBase):
-    pass
+    level_test_date: date | None = None
+    level_test_time: str | None = None
+    level_test_result: str | None = None
+
+
+class LevelTestUpdate(BaseModel):
+    level_test_date: date | None = None
+    level_test_time: str | None = None
+    level_test_result: str | None = None
 
 
 class CycleResponse(BaseModel):
@@ -37,11 +48,19 @@ class CycleResponse(BaseModel):
 class StudentResponse(StudentBase):
     id: int
     enrollment_status: str
+    level_test_date: date | None = None
+    level_test_time: str | None = None
+    level_test_result: str | None = None
     created_at: datetime
     updated_at: datetime
     class_group_name: str | None = None
     current_cycle: CycleResponse | None = None
     effective_tuition: int = 0
+    # 상태별 일자 (EnrollmentHistory에서 계산)
+    inquiry_date: datetime | None = None
+    level_test_status_date: datetime | None = None
+    active_date: datetime | None = None
+    stopped_date: datetime | None = None
 
     model_config = {"from_attributes": True}
 
